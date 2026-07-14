@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# VS Code
+.vscode/
+
+# JetBrains
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.*
+
+# Logs
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights (large files) - keep out of git
+*.pt
+yolov8n.pt
+yolo26n.pt
+detector/yolo26n.pt
+
+# Data and generated dashboard content
+dashboard_data/
+dashboard_data/reports/
+dashboard_data/screenshots/
+reports/
+screenshots/
+
+# Media / large assets
+assets/*.mp4
+assets/*.mov
+assets/videos/
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+
+# Databases
+*.sqlite3
+*.db

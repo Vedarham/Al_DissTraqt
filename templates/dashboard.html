@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DissTraqt - Classroom Monitoring Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .session-timer {
+            background: #f0f4ff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-card {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: 700;
+            color: #667eea;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            color: #666;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-card.danger .stat-number {
+            color: #ff6b6b;
+        }
+
+        .stat-card.warning .stat-number {
+            color: #ffa94d;
+        }
+
+        .stat-card.success .stat-number {
+            color: #51cf66;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+
+        .people-list {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .people-list h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .person-item {
+            display: grid;
+            grid-template-columns: 80px 150px 1fr auto;
+            align-items: center;
+            gap: 20px;
+            padding: 15px;
+            border: 2px solid #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .person-item:hover {
+            border-color: #667eea;
+            background: #f9f9ff;
+        }
+
+        .person-item.high-risk {
+            border-color: #ff6b6b;
+            background: #fff5f5;
+        }
+
+        .person-item.medium-risk {
+            border-color: #ffa94d;
+            background: #fffbf0;
+        }
+
+        .person-id {
+            font-weight: 700;
+            font-size: 1.5em;
+            color: #667eea;
+            background: #f0f4ff;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .person-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .person-info strong {
+            color: #333;
+        }
+
+        .person-info small {
+            color: #999;
+        }
+
+        .person-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            flex: 1;
+        }
+
+        .violation-badge {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .violation-badge.phone {
+            background: #ffe0e0;
+            color: #c92a2a;
+        }
+
+        .violation-badge.gaze {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .violation-badge.head {
+            background: #f3e5f5;
+            color: #6a1b9a;
+        }
+
+        .violation-badge strong {
+            display: block;
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+
+        .risk-score {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .score-bar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .score-bar.low {
+            background: #51cf66;
+        }
+
+        .score-bar.medium {
+            background: #ffa94d;
+        }
+
+        .score-bar.high {
+            background: #ff6b6b;
+        }
+
+        .violations-feed {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .violations-feed h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .violation-item {
+            display: flex;
+            gap: 15px;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            background: #f9f9ff;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .violation-item:hover {
+            box-shadow: 0 4px 10px rgba(102, 126, 234, 0.2);
+            transform: translateX(5px);
+        }
+
+        .violation-item.phone {
+            border-left-color: #ff6b6b;
+            background: #fff5f5;
+        }
+
+        .violation-item.gaze_away {
+            border-left-color: #ffa94d;
+            background: #fffbf0;
+        }
+
+        .violation-item.head_down {
+            border-left-color: #9775fa;
+            background: #f3e5f5;
+        }
+
+        .violation-icon {
+            font-size: 1.5em;
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .violation-content {
+            flex: 1;
+        }
+
+        .violation-content strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .violation-time {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            color: #666;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            border-bottom-color: #667eea;
+            color: #667eea;
+        }
+
+        .tab:hover {
+            color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #f0f0f0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .filter-btn:hover {
+            border-color: #667eea;
+            color: #667eea;
+        }
+
+        .filter-btn.active:hover {
+            background: #5568d3;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .person-item {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .header-info {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .refresh-info {
+            text-align: right;
+            color: #999;
+            font-size: 0.85em;
+            margin-top: 15px;
+        }
+
+        .stat-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 DissTraqt Monitoring Dashboard</h1>
+            <div class="header-info">
+                <div class="session-timer">
+                    ⏱️ Session Time: <span id="session-timer">0:00</span>
+                </div>
+                <div class="btn-group">
+                    <button onclick="refreshData()">🔄 Refresh Now</button>
+                    <button onclick="exportReport()">📥 Export Report</button>
+                    <button onclick="resetSession()" style="background: #ff6b6b;">🔁 Reset Session</button>
+                </div>
+            </div>
+            <div class="refresh-info">
+                Last updated: <span id="last-update">--:--:--</span>
+            </div>
+        </header>
+
+        <!-- Statistics Cards -->
+        <div class="dashboard-grid">
+            <div class="card stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-label">Total People</div>
+                <div class="stat-number" id="stat-people">0</div>
+            </div>
+
+            <div class="card stat-card warning">
+                <div class="stat-icon">☎️</div>
+                <div class="stat-label">Phone Violations</div>
+                <div class="stat-number" id="stat-phones">0</div>
+            </div>
+
+            <div class="card stat-card danger">
+                <div class="stat-icon">👀</div>
+                <div class="stat-label">Gaze Violations</div>
+                <div class="stat-number" id="stat-gaze">0</div>
+            </div>
+
+            <div class="card stat-card danger">
+                <div class="stat-icon">⬇️</div>
+                <div class="stat-label">Head Down Events</div>
+                <div class="stat-number" id="stat-head">0</div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-label">Avg Distraction</div>
+                <div class="stat-number" id="stat-avg-distraction">0</div>
+            </div>
+
+            <div class="card stat-card">
+                <div class="stat-icon">🎯</div>
+                <div class="stat-label">Most Distracted</div>
+                <div class="stat-number" id="stat-most-distracted">--</div>
+            </div>
+        </div>
+
+        <!-- People Monitoring -->
+        <div class="people-list">
+            <h2>👤 Tracked People & Violations</h2>
+            <div id="people-container">
+                <div class="empty-state">
+                    <div class="empty-state-icon">👥</div>
+                    <p>No people detected yet. Start monitoring or test with sample data.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Violations Feed -->
+        <div class="violations-feed">
+            <h2>⚠️ Violation Feed</h2>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('all')">All Violations</button>
+                <button class="tab" onclick="switchTab('phone')">☎️ Phone</button>
+                <button class="tab" onclick="switchTab('gaze')">👀 Gaze Away</button>
+                <button class="tab" onclick="switchTab('head')">⬇️ Head Down</button>
+            </div>
+
+            <div id="all" class="tab-content active">
+                <div id="violations-all"></div>
+            </div>
+            <div id="phone" class="tab-content">
+                <div id="violations-phone"></div>
+            </div>
+            <div id="gaze" class="tab-content">
+                <div id="violations-gaze"></div>
+            </div>
+            <div id="head" class="tab-content">
+                <div id="violations-head"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============= CONFIGURATION =============
+        const API_BASE = 'http://localhost:5000/api';
+        const REFRESH_INTERVAL = 3000; // 3 seconds
+        let refreshTimer = null;
+        let sessionStartTime = null;
+
+        // ============= DATA FUNCTIONS =============
+
+        async function fetchData(endpoint) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`);
+                return await response.json();
+            } catch (error) {
+                console.error(`Error fetching ${endpoint}:`, error);
+                return null;
+            }
+        }
+
+        async function refreshData() {
+            console.log('Refreshing dashboard...');
+            document.body.classList.add('loading');
+
+            const summary = await fetchData('/summary');
+            const stats = await fetchData('/statistics');
+            const violations = await fetchData('/violations');
+
+            if (summary) updateStatistics(summary, stats);
+            if (violations) updateViolationsFeed(violations);
+
+            updateTimestamp();
+            document.body.classList.remove('loading');
+        }
+
+        function updateStatistics(summary, stats) {
+            if (!summary || !stats) return;
+
+            document.getElementById('stat-people').textContent = summary.total_people;
+            document.getElementById('stat-phones').textContent = stats.phone_violations;
+            document.getElementById('stat-gaze').textContent = stats.gaze_violations;
+            document.getElementById('stat-head').textContent = stats.head_violations;
+            document.getElementById('stat-avg-distraction').textContent = stats.avg_distraction_score.toFixed(1);
+            
+            const mostDistracted = stats.most_distracted_person;
+            if (mostDistracted) {
+                document.getElementById('stat-most-distracted').textContent = 
+                    `Person ${mostDistracted.id} (${mostDistracted.score})`;
+            }
+
+            updatePeopleList(summary.people);
+        }
+
+        function updatePeopleList(people) {
+            const container = document.getElementById('people-container');
+            
+            if (!people || people.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">👥</div>
+                        <p>No people detected yet.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort by distraction score
+            people.sort((a, b) => b.distraction_score - a.distraction_score);
+
+            container.innerHTML = people.map(person => {
+                const riskLevel = person.distraction_score < 30 ? 'low' : 
+                                 person.distraction_score < 60 ? 'medium' : 'high';
+                const riskClass = riskLevel === 'high' ? 'high-risk' : 
+                                 riskLevel === 'medium' ? 'medium-risk' : '';
+
+                return `
+                    <div class="person-item ${riskClass}">
+                        <div class="person-id">ID ${person.person_id}</div>
+                        <div class="person-info">
+                            <strong>Person #${person.person_id}</strong>
+                            <small>${person.total_violations} total violations</small>
+                        </div>
+                        <div class="person-stats">
+                            <div class="violation-badge phone">
+                                <strong>${person.total_phone_events}</strong>
+                                Phone
+                            </div>
+                            <div class="violation-badge gaze">
+                                <strong>${person.total_gaze_events}</strong>
+                                Gaze
+                            </div>
+                            <div class="violation-badge head">
+                                <strong>${person.total_head_events}</strong>
+                                Head
+                            </div>
+                        </div>
+                        <div class="risk-score">
+                            <div class="score-bar ${riskLevel}">${person.distraction_score}</div>
+                            <small>Risk Score</small>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateViolationsFeed(violations) {
+            if (!violations || violations.length === 0) {
+                const allContainer = document.getElementById('violations-all');
+                allContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✨</div>
+                        <p>No violations yet. Great monitoring!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Display all violations
+            const allHtml = violations.map(v => formatViolationItem(v)).join('');
+            document.getElementById('violations-all').innerHTML = allHtml;
+
+            // Filter by type
+            const phoneViolations = violations.filter(v => v.event_type === 'phone');
+            const gazeViolations = violations.filter(v => v.event_type === 'gaze_away');
+            const headViolations = violations.filter(v => v.event_type === 'head_down');
+
+            document.getElementById('violations-phone').innerHTML = 
+                phoneViolations.length ? phoneViolations.map(v => formatViolationItem(v)).join('') :
+                '<div class="empty-state"><p>No phone violations</p></div>';
+
+            document.getElementById('violations-gaze').innerHTML = 
+                gazeViolations.length ? gazeViolations.map(v => formatViolationItem(v)).join('') :
+                '<div class="empty-state"><p>No gaze violations</p></div>';
+
+            document.getElementById('violations-head').innerHTML = 
+                headViolations.length ? headViolations.map(v => formatViolationItem(v)).join('') :
+                '<div class="empty-state"><p>No head violations</p></div>';
+        }
+
+        function formatViolationItem(violation) {
+            const icons = {
+                'phone': '☎️',
+                'gaze_away': '👀',
+                'head_down': '⬇️'
+            };
+
+            const time = new Date(violation.timestamp * 1000).toLocaleTimeString();
+            const icon = icons[violation.event_type] || '⚠️';
+            const typeLabel = violation.event_type.replace('_', ' ');
+
+            return `
+                <div class="violation-item ${violation.event_type}">
+                    <div class="violation-icon">${icon}</div>
+                    <div class="violation-content">
+                        <strong>Person ${violation.person_id} - ${typeLabel.toUpperCase()}</strong>
+                        <div>Duration: ${violation.duration.toFixed(1)}s</div>
+                        <div class="violation-time">${time}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(t => {
+                t.classList.remove('active');
+            });
+
+            // Remove active from buttons
+            document.querySelectorAll('.tab').forEach(b => {
+                b.classList.remove('active');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function updateTimestamp() {
+            const now = new Date();
+            document.getElementById('last-update').textContent = now.toLocaleTimeString();
+        }
+
+        function updateSessionTimer() {
+            if (!sessionStartTime) {
+                sessionStartTime = Date.now();
+            }
+            const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+            const hours = Math.floor(elapsed / 3600);
+            const minutes = Math.floor((elapsed % 3600) / 60);
+            const seconds = elapsed % 60;
+
+            let timerText = '';
+            if (hours > 0) timerText += `${hours}:`;
+            timerText += `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+            document.getElementById('session-timer').textContent = timerText;
+        }
+
+        async function exportReport() {
+            const response = await fetch(`${API_BASE}/report/export`, { method: 'POST' });
+            const data = await response.json();
+            alert(`Report exported: ${data.file}`);
+            console.log('Report saved to:', data.path);
+        }
+
+        async function resetSession() {
+            if (confirm('⚠️ Reset all monitoring data? This cannot be undone.')) {
+                await fetch(`${API_BASE}/reset`, { method: 'POST' });
+                sessionStartTime = Date.now();
+                await refreshData();
+            }
+        }
+
+        // ============= INITIALIZATION =============
+
+        async function testAddViolation() {
+            // Helper function for testing
+            const types = ['phone', 'gaze_away', 'head_down'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const personId = Math.floor(Math.random() * 5) + 1;
+            
+            await fetch(`${API_BASE}/test/add-violation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    person_id: personId,
+                    event_type: type,
+                    duration: Math.random() * 15 + 5
+                })
+            });
+            
+            await refreshData();
+        }
+
+        function init() {
+            console.log('Initializing dashboard...');
+            refreshData();
+            updateSessionTimer();
+            
+            // Auto-refresh every 3 seconds
+            refreshTimer = setInterval(refreshData, REFRESH_INTERVAL);
+            
+            // Update timer every second
+            setInterval(updateSessionTimer, 1000);
+        }
+
+        // Start when page loads
+        document.addEventListener('DOMContentLoaded', init);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (refreshTimer) clearInterval(refreshTimer);
+        });
+    </script>
+</body>
+</html>
