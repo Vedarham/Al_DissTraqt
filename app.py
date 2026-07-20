@@ -8,7 +8,7 @@ Provides endpoints for:
 - Person tracking visualization
 """
 
-from flask import Flask, render_template, jsonify, request, send_file
+from flask import Flask, render_template, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 import json
 import os
@@ -20,12 +20,24 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass, asdict
+import sys
+from pathlib import Path
+
+# Ensure project root directory is in sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import base64
 from io import BytesIO
 from PIL import Image
+import config
 
 app = Flask(__name__)
 CORS(app)
+
+# Load configuration
+system_config = config.load_config()
 
 # ============= CONFIGURATION =============
 DATA_DIR = Path("./dashboard_data")
@@ -103,6 +115,9 @@ class MonitoringState:
         self.current_frame_time = None
         self.session_start_time = None
         self.processing = False
+        self.active_people_count = 0
+        self.active_person_ids = []
+        self.last_heartbeat = 0.0
         self.lock = threading.Lock()
     
     def add_violation(self, person_id, event_type, duration, screenshot_path=None):
@@ -134,13 +149,44 @@ class MonitoringState:
                 report.total_head_duration += duration
     
     def get_summary(self):
-        """Get current monitoring summary"""
+        """Get current monitoring summary, combining active tracker metrics with registered violations"""
         with self.lock:
+            now = time.time()
+            is_active = (now - self.last_heartbeat) < 8.0
+            active_count = self.active_people_count if is_active else 0
+            active_ids = self.active_person_ids if is_active else []
+            
+            combined_people = []
+            seen_ids = set()
+            
+            for r in self.people_reports.values():
+                combined_people.append(r.to_dict())
+                seen_ids.add(r.person_id)
+                
+            for pid in active_ids:
+                if pid not in seen_ids:
+                    combined_people.append({
+                        'person_id': pid,
+                        'total_phone_events': 0,
+                        'total_phone_duration': 0.0,
+                        'total_gaze_events': 0,
+                        'total_gaze_duration': 0.0,
+                        'total_head_events': 0,
+                        'total_head_duration': 0.0,
+                        'total_violations': 0,
+                        'distraction_score': 0,
+                        'violations': []
+                    })
+                    seen_ids.add(pid)
+            
+            total_people = active_count if active_count > 0 else len(self.people_reports)
+            
             return {
                 'session_start': self.session_start_time,
-                'total_people': len(self.people_reports),
+                'total_people': total_people,
                 'total_violations': sum(r.total_violations for r in self.people_reports.values()),
-                'people': [r.to_dict() for r in self.people_reports.values()],
+                'people': combined_people,
+                'live_view_path': getattr(self, 'live_view_path', None)
             }
     
     def save_screenshot(self, frame, person_id, event_type):
@@ -216,16 +262,15 @@ def get_violations_by_type(event_type):
         return jsonify(violations)
 
 
-@app.route('/api/statistics')
-def get_statistics():
-    """Get statistical summary"""
+def _get_statistics_data():
+    """Helper to compute statistics data dictionary safely"""
     with monitor_state.lock:
         stats = {
             'total_people_tracked': len(monitor_state.people_reports),
             'phone_violations': sum(r.total_phone_events for r in monitor_state.people_reports.values()),
             'gaze_violations': sum(r.total_gaze_events for r in monitor_state.people_reports.values()),
             'head_violations': sum(r.total_head_events for r in monitor_state.people_reports.values()),
-            'avg_distraction_score': 0,
+            'avg_distraction_score': 0.0,
             'most_distracted_person': None,
             'session_duration_minutes': round((time.time() - monitor_state.session_start_time) / 60, 2)
         }
@@ -241,17 +286,23 @@ def get_statistics():
                 'score': most_distracted.distraction_score
             }
         
-        return jsonify(stats)
+        return stats
 
 
-@app.route('/api/report/export')
+@app.route('/api/statistics')
+def get_statistics():
+    """Get statistical summary"""
+    return jsonify(_get_statistics_data())
+
+
+@app.route('/api/report/export', methods=['GET', 'POST'])
 def export_report():
     """Export full report as JSON"""
     report_data = {
         'generated_at': datetime.now().isoformat(),
         'session_duration_minutes': round((time.time() - monitor_state.session_start_time) / 60, 2),
         'summary': monitor_state.get_summary(),
-        'statistics': json.loads(jsonify(get_statistics()).get_json())
+        'statistics': _get_statistics_data()
     }
     
     # Save to file
@@ -268,19 +319,71 @@ def export_report():
     })
 
 
+@app.route('/dashboard_data/<path:path>')
+def serve_dashboard_data(path):
+    """Serve files from dashboard data directory (like screenshots and reports)"""
+    return send_from_directory(DATA_DIR, path)
+
+
+@app.route('/api/update-state', methods=['POST'])
+def update_state():
+    """Endpoint for detector to send real-time tracking metrics (heartbeat) and live view frame"""
+    data = request.json or {}
+    active_people_count = data.get('active_people_count', 0)
+    active_person_ids = data.get('active_person_ids', [])
+    frame_b64 = data.get('frame', None)
+    
+    with monitor_state.lock:
+        monitor_state.active_people_count = active_people_count
+        monitor_state.active_person_ids = active_person_ids
+        monitor_state.last_heartbeat = time.time()
+        
+        if frame_b64:
+            try:
+                # Decode base64 live frame
+                img_data = base64.b64decode(frame_b64)
+                img = Image.open(BytesIO(img_data))
+                frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                
+                # Save as live_view.jpg in SCREENSHOTS_DIR
+                filepath = SCREENSHOTS_DIR / "live_view.jpg"
+                cv2.imwrite(str(filepath), frame)
+                monitor_state.live_view_path = str(filepath.relative_to(DATA_DIR))
+            except Exception as e:
+                print(f"Error saving live view: {e}")
+        
+    return jsonify({'status': 'success'})
+
+
 @app.route('/api/test/add-violation', methods=['POST'])
 def test_add_violation():
-    """Test endpoint: Add a sample violation"""
+    """Test endpoint: Add a sample violation, decoding optional base64 frame for screenshot"""
     data = request.json or {}
     person_id = data.get('person_id', 1)
     event_type = data.get('event_type', 'phone')
     duration = data.get('duration', 10.0)
+    frame_b64 = data.get('frame', None)
     
-    monitor_state.add_violation(person_id, event_type, duration)
+    screenshot_path = None
+    if frame_b64:
+        try:
+            # Decode base64 frame
+            img_data = base64.b64decode(frame_b64)
+            img = Image.open(BytesIO(img_data))
+            # Convert PIL image to BGR numpy array for OpenCV
+            frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+            
+            # Save screenshot
+            screenshot_path = monitor_state.save_screenshot(frame, person_id, event_type)
+        except Exception as e:
+            print(f"Error saving screenshot: {e}")
+            
+    monitor_state.add_violation(person_id, event_type, duration, screenshot_path=screenshot_path)
     
     return jsonify({
         'status': 'success',
-        'message': f'Added {event_type} violation for person {person_id}'
+        'message': f'Added {event_type} violation for person {person_id}',
+        'screenshot_path': screenshot_path
     })
 
 
@@ -289,6 +392,25 @@ def reset_monitoring():
     """Reset monitoring state"""
     monitor_state.reset()
     return jsonify({'status': 'success', 'message': 'Monitoring state reset'})
+
+
+@app.route('/api/config', methods=['GET', 'POST'])
+def handle_config():
+    """Get or update system distraction detection configuration parameters"""
+    global system_config
+    if request.method == 'POST':
+        data = request.json or {}
+        system_config = config.DistractionConfig.from_dict(data)
+        config.save_config(system_config)
+        return jsonify({
+            'status': 'success',
+            'message': 'Configuration updated successfully',
+            'config': system_config.to_dict()
+        })
+    else:
+        # Reload latest config from disk
+        system_config = config.load_config()
+        return jsonify(system_config.to_dict())
 
 
 @app.route('/health')
